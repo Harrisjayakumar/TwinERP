@@ -1,0 +1,1645 @@
+// TwinERP Prisma Schema
+// Multi-tenant SaaS ERP by Twincord Technologies Pvt. Ltd.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Core Tenant Models ───────────────────────────────────────────────────────
+
+model Organization {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  logo        String?
+  website     String?
+  industry    String?
+  size        String?
+  country     String    @default("IN")
+  currency    String    @default("INR")
+  timezone    String    @default("Asia/Kolkata")
+  gstNumber   String?
+  cin         String?
+  pan         String?
+  address     Json?
+  settings    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  users         User[]
+  sessions      Session[]
+  subscriptions Subscription[]
+  employees     Employee[]
+  departments   Department[]
+  invoices      Invoice[]
+  clients       Client[]
+  estimates     Estimate[]
+  proposals     Proposal[]
+  purchaseOrders PurchaseOrder[]
+  payments      Payment[]
+  creditNotes   CreditNote[]
+  debitNotes    DebitNote[]
+  products      Product[]
+  recurringInvoices RecurringInvoice[]
+  taxRules      TaxRule[]
+  chartOfAccounts ChartOfAccount[]
+  journalEntries JournalEntry[]
+  budgets       Budget[]
+  bankAccounts  BankAccount[]
+  bankTransactions BankTransaction[]
+  payslips      Payslip[]
+  attendance    Attendance[]
+  leaves        Leave[]
+  leaveTypes    LeaveType[]
+  holidays      Holiday[]
+  jobs          Job[]
+  candidates    Candidate[]
+  applications  Application[]
+  offerLetters  OfferLetter[]
+  projects      Project[]
+  tasks         Task[]
+  sprints       Sprint[]
+  timesheets    Timesheet[]
+  leads         Lead[]
+  deals         Deal[]
+  contacts      Contact[]
+  orders        Order[]
+  warehouses    Warehouse[]
+  stockItems    StockItem[]
+  vendors       Vendor[]
+  expenses      Expense[]
+  contracts     Contract[]
+  forms         Form[]
+  supportTickets SupportTicket[]
+  kbArticles    KBArticle[]
+  calendarEvents CalendarEvent[]
+  messages      Message[]
+  channels      Channel[]
+  mediaFiles    MediaFile[]
+  automationWorkflows AutomationWorkflow[]
+  webhookEndpoints WebhookEndpoint[]
+  apiKeys       APIKey[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  featureFlags  FeatureFlag[]
+  customFields  CustomField[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  organizationId String
+  email          String
+  emailVerified  Boolean   @default(false)
+  passwordHash   String?
+  firstName      String
+  lastName       String
+  avatar         String?
+  phone          String?
+  role           UserRole  @default(MEMBER)
+  permissions    Json?
+  mfaEnabled     Boolean   @default(false)
+  mfaSecret      String?
+  googleId       String?
+  microsoftId    String?
+  lastLoginAt    DateTime?
+  isActive       Boolean   @default(true)
+  isSuperAdmin   Boolean   @default(false)
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  sessions       Session[]
+  refreshTokens  RefreshToken[]
+  employee       Employee?
+  createdTasks   Task[]         @relation("TaskCreator")
+  assignedTasks  Task[]         @relation("TaskAssignee")
+  timesheets     Timesheet[]
+  expenses       Expense[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+
+  @@unique([organizationId, email])
+  @@index([email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Session {
+  id             String    @id @default(uuid())
+  organizationId String
+  userId         String
+  token          String    @unique
+  ipAddress      String?
+  userAgent      String?
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  token       String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// ─── Subscription & Billing ───────────────────────────────────────────────────
+
+model Plan {
+  id            String    @id @default(uuid())
+  name          String
+  slug          String    @unique
+  description   String?
+  price         Decimal   @db.Decimal(10, 2)
+  currency      String    @default("INR")
+  interval      String    @default("monthly")
+  trialDays     Int       @default(14)
+  features      Json
+  limits        Json
+  isActive      Boolean   @default(true)
+  stripePriceId String?
+  razorpayPlanId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id              String             @id @default(uuid())
+  organizationId  String
+  planId          String
+  status          SubscriptionStatus @default(TRIAL)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  trialEndsAt     DateTime?
+  cancelledAt     DateTime?
+  stripeSubscriptionId String?
+  razorpaySubscriptionId String?
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  plan            Plan         @relation(fields: [planId], references: [id])
+
+  @@index([organizationId])
+  @@map("subscriptions")
+}
+
+// ─── HRM ──────────────────────────────────────────────────────────────────────
+
+model Department {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  managerId      String?
+  parentId       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  employees      Employee[]
+  parent         Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children       Department[] @relation("DepartmentHierarchy")
+
+  @@index([organizationId])
+  @@map("departments")
+}
+
+model Employee {
+  id              String         @id @default(uuid())
+  organizationId  String
+  userId          String?        @unique
+  employeeCode    String
+  firstName       String
+  lastName        String
+  email           String
+  phone           String?
+  avatar          String?
+  departmentId    String?
+  designation     String?
+  employmentType  EmploymentType @default(FULL_TIME)
+  status          EmployeeStatus @default(ACTIVE)
+  joinDate        DateTime
+  exitDate        DateTime?
+  salary          Decimal?       @db.Decimal(12, 2)
+  salaryType      String?
+  managerId       String?
+  bankDetails     Json?
+  documents       Json?
+  address         Json?
+  emergencyContact Json?
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  user            User?        @relation(fields: [userId], references: [id])
+  department      Department?  @relation(fields: [departmentId], references: [id])
+  manager         Employee?    @relation("EmployeeManager", fields: [managerId], references: [id])
+  reports         Employee[]   @relation("EmployeeManager")
+  payslips        Payslip[]
+  attendance      Attendance[]
+  leaves          Leave[]
+
+  @@unique([organizationId, employeeCode])
+  @@index([organizationId])
+  @@map("employees")
+}
+
+model Payslip {
+  id             String    @id @default(uuid())
+  organizationId String
+  employeeId     String
+  month          Int
+  year           Int
+  basicSalary    Decimal   @db.Decimal(12, 2)
+  allowances     Json?
+  deductions     Json?
+  grossPay       Decimal   @db.Decimal(12, 2)
+  netPay         Decimal   @db.Decimal(12, 2)
+  status         String    @default("draft")
+  paidAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  employee       Employee     @relation(fields: [employeeId], references: [id])
+
+  @@index([organizationId, employeeId])
+  @@map("payslips")
+}
+
+model Attendance {
+  id             String    @id @default(uuid())
+  organizationId String
+  employeeId     String
+  date           DateTime  @db.Date
+  checkIn        DateTime?
+  checkOut       DateTime?
+  status         String    @default("present")
+  hoursWorked    Decimal?  @db.Decimal(5, 2)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  employee       Employee     @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@index([organizationId])
+  @@map("attendance")
+}
+
+model LeaveType {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  code           String
+  daysAllowed    Int
+  isPaid         Boolean   @default(true)
+  carryForward   Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  leaves         Leave[]
+
+  @@index([organizationId])
+  @@map("leave_types")
+}
+
+model Leave {
+  id             String      @id @default(uuid())
+  organizationId String
+  employeeId     String
+  leaveTypeId    String
+  startDate      DateTime    @db.Date
+  endDate        DateTime    @db.Date
+  days           Decimal     @db.Decimal(4, 1)
+  reason         String?
+  status         LeaveStatus @default(PENDING)
+  approvedBy     String?
+  approvedAt     DateTime?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  employee       Employee     @relation(fields: [employeeId], references: [id])
+  leaveType      LeaveType    @relation(fields: [leaveTypeId], references: [id])
+
+  @@index([organizationId, employeeId])
+  @@map("leaves")
+}
+
+model Holiday {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  date           DateTime  @db.Date
+  type           String    @default("public")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("holidays")
+}
+
+// ─── Recruitment ──────────────────────────────────────────────────────────────
+
+model Job {
+  id             String    @id @default(uuid())
+  organizationId String
+  title          String
+  departmentId   String?
+  description    String?
+  requirements   String?
+  type           String    @default("full_time")
+  location       String?
+  isRemote       Boolean   @default(false)
+  salaryMin      Decimal?  @db.Decimal(12, 2)
+  salaryMax      Decimal?  @db.Decimal(12, 2)
+  status         String    @default("open")
+  postedAt       DateTime?
+  closedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  applications   Application[]
+
+  @@index([organizationId])
+  @@map("jobs")
+}
+
+model Candidate {
+  id             String    @id @default(uuid())
+  organizationId String
+  firstName      String
+  lastName       String
+  email          String
+  phone          String?
+  resumeUrl      String?
+  linkedinUrl    String?
+  source         String?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  applications   Application[]
+
+  @@index([organizationId])
+  @@map("candidates")
+}
+
+model Application {
+  id             String            @id @default(uuid())
+  organizationId String
+  jobId          String
+  candidateId    String
+  status         ApplicationStatus @default(APPLIED)
+  stage          String            @default("screening")
+  notes          String?
+  interviewDate  DateTime?
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  job            Job          @relation(fields: [jobId], references: [id])
+  candidate      Candidate    @relation(fields: [candidateId], references: [id])
+  offerLetters   OfferLetter[]
+
+  @@index([organizationId])
+  @@map("applications")
+}
+
+model OfferLetter {
+  id             String    @id @default(uuid())
+  organizationId String
+  applicationId  String
+  salary         Decimal   @db.Decimal(12, 2)
+  joiningDate    DateTime
+  content        String?
+  status         String    @default("draft")
+  sentAt         DateTime?
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  application    Application  @relation(fields: [applicationId], references: [id])
+
+  @@index([organizationId])
+  @@map("offer_letters")
+}
+
+// ─── Sales & Finance ──────────────────────────────────────────────────────────
+
+model Client {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  email          String?
+  phone          String?
+  website        String?
+  gstNumber      String?
+  pan            String?
+  billingAddress Json?
+  shippingAddress Json?
+  currency       String    @default("INR")
+  creditLimit    Decimal?  @db.Decimal(12, 2)
+  notes          String?
+  tags           String[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  invoices       Invoice[]
+  estimates      Estimate[]
+  proposals      Proposal[]
+  payments       Payment[]
+
+  @@index([organizationId])
+  @@map("clients")
+}
+
+model TaxRule {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  rate           Decimal   @db.Decimal(5, 2)
+  type           String    @default("GST")
+  description    String?
+  isDefault      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("tax_rules")
+}
+
+model Product {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  code           String?
+  description    String?
+  type           String    @default("service")
+  unit           String?
+  price          Decimal   @db.Decimal(12, 2)
+  taxRate        Decimal?  @db.Decimal(5, 2)
+  hsn            String?
+  sac            String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  invoiceLineItems  InvoiceLineItem[]
+  stockItems        StockItem[]
+
+  @@index([organizationId])
+  @@map("products")
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  organizationId String
+  invoiceNumber  String
+  clientId       String
+  status         InvoiceStatus @default(DRAFT)
+  issueDate      DateTime      @db.Date
+  dueDate        DateTime      @db.Date
+  currency       String        @default("INR")
+  subtotal       Decimal       @db.Decimal(12, 2)
+  taxAmount      Decimal       @db.Decimal(12, 2)
+  discountAmount Decimal       @db.Decimal(12, 2)  @default(0)
+  total          Decimal       @db.Decimal(12, 2)
+  paidAmount     Decimal       @db.Decimal(12, 2)  @default(0)
+  notes          String?
+  terms          String?
+  sentAt         DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  client         Client            @relation(fields: [clientId], references: [id])
+  lineItems      InvoiceLineItem[]
+  payments       Payment[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  productId   String?
+  description String
+  quantity    Decimal  @db.Decimal(10, 2)
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  taxRate     Decimal  @db.Decimal(5, 2)  @default(0)
+  taxAmount   Decimal  @db.Decimal(12, 2) @default(0)
+  total       Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id])
+
+  @@map("invoice_line_items")
+}
+
+model Estimate {
+  id             String         @id @default(uuid())
+  organizationId String
+  estimateNumber String
+  clientId       String
+  status         EstimateStatus @default(DRAFT)
+  issueDate      DateTime       @db.Date
+  validUntil     DateTime       @db.Date
+  currency       String         @default("INR")
+  subtotal       Decimal        @db.Decimal(12, 2)
+  taxAmount      Decimal        @db.Decimal(12, 2)
+  total          Decimal        @db.Decimal(12, 2)
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  client         Client       @relation(fields: [clientId], references: [id])
+
+  @@unique([organizationId, estimateNumber])
+  @@index([organizationId])
+  @@map("estimates")
+}
+
+model Proposal {
+  id             String    @id @default(uuid())
+  organizationId String
+  title          String
+  clientId       String
+  status         String    @default("draft")
+  content        String?
+  value          Decimal?  @db.Decimal(12, 2)
+  validUntil     DateTime?
+  sentAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  client         Client       @relation(fields: [clientId], references: [id])
+
+  @@index([organizationId])
+  @@map("proposals")
+}
+
+model PurchaseOrder {
+  id             String    @id @default(uuid())
+  organizationId String
+  poNumber       String
+  vendorId       String?
+  status         String    @default("draft")
+  issueDate      DateTime  @db.Date
+  expectedDate   DateTime? @db.Date
+  currency       String    @default("INR")
+  subtotal       Decimal   @db.Decimal(12, 2)
+  taxAmount      Decimal   @db.Decimal(12, 2)
+  total          Decimal   @db.Decimal(12, 2)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, poNumber])
+  @@index([organizationId])
+  @@map("purchase_orders")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  organizationId String
+  invoiceId      String?
+  clientId       String?
+  amount         Decimal       @db.Decimal(12, 2)
+  currency       String        @default("INR")
+  method         String?
+  status         PaymentStatus @default(PENDING)
+  reference      String?
+  gateway        String?
+  gatewayTxnId   String?
+  paidAt         DateTime?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id])
+  client         Client?      @relation(fields: [clientId], references: [id])
+
+  @@index([organizationId])
+  @@map("payments")
+}
+
+model CreditNote {
+  id             String    @id @default(uuid())
+  organizationId String
+  creditNoteNumber String
+  clientId       String?
+  amount         Decimal   @db.Decimal(12, 2)
+  reason         String?
+  status         String    @default("draft")
+  issueDate      DateTime  @db.Date
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, creditNoteNumber])
+  @@index([organizationId])
+  @@map("credit_notes")
+}
+
+model DebitNote {
+  id             String    @id @default(uuid())
+  organizationId String
+  debitNoteNumber String
+  vendorId       String?
+  amount         Decimal   @db.Decimal(12, 2)
+  reason         String?
+  status         String    @default("draft")
+  issueDate      DateTime  @db.Date
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, debitNoteNumber])
+  @@index([organizationId])
+  @@map("debit_notes")
+}
+
+model RecurringInvoice {
+  id             String    @id @default(uuid())
+  organizationId String
+  clientId       String?
+  frequency      String    @default("monthly")
+  nextRunDate    DateTime  @db.Date
+  lastRunDate    DateTime? @db.Date
+  template       Json
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("recurring_invoices")
+}
+
+// ─── Accounting ───────────────────────────────────────────────────────────────
+
+model ChartOfAccount {
+  id             String    @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  type           String
+  parentId       String?
+  description    String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  parent         ChartOfAccount? @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children       ChartOfAccount[] @relation("AccountHierarchy")
+  journalLines   JournalLine[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("chart_of_accounts")
+}
+
+model JournalEntry {
+  id             String    @id @default(uuid())
+  organizationId String
+  entryNumber    String
+  date           DateTime  @db.Date
+  description    String?
+  reference      String?
+  status         String    @default("draft")
+  isPosted       Boolean   @default(false)
+  postedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  lines          JournalLine[]
+
+  @@unique([organizationId, entryNumber])
+  @@index([organizationId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id               String   @id @default(uuid())
+  journalEntryId   String
+  accountId        String
+  description      String?
+  debit            Decimal  @db.Decimal(12, 2) @default(0)
+  credit           Decimal  @db.Decimal(12, 2) @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  journalEntry     JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account          ChartOfAccount @relation(fields: [accountId], references: [id])
+
+  @@map("journal_lines")
+}
+
+model Budget {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  year           Int
+  period         String    @default("annual")
+  items          Json
+  totalBudget    Decimal   @db.Decimal(14, 2)
+  status         String    @default("draft")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("budgets")
+}
+
+model BankAccount {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  accountNumber  String?
+  bankName       String?
+  ifscCode       String?
+  accountType    String    @default("current")
+  currency       String    @default("INR")
+  openingBalance Decimal   @db.Decimal(12, 2) @default(0)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  transactions   BankTransaction[]
+
+  @@index([organizationId])
+  @@map("bank_accounts")
+}
+
+model BankTransaction {
+  id             String    @id @default(uuid())
+  organizationId String
+  bankAccountId  String
+  date           DateTime  @db.Date
+  description    String?
+  amount         Decimal   @db.Decimal(12, 2)
+  type           String
+  balance        Decimal?  @db.Decimal(12, 2)
+  reference      String?
+  isReconciled   Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  bankAccount    BankAccount  @relation(fields: [bankAccountId], references: [id])
+
+  @@index([organizationId])
+  @@map("bank_transactions")
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+model Project {
+  id             String        @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  status         ProjectStatus @default(ACTIVE)
+  priority       String        @default("medium")
+  startDate      DateTime?     @db.Date
+  endDate        DateTime?     @db.Date
+  budget         Decimal?      @db.Decimal(12, 2)
+  progress       Int           @default(0)
+  clientId       String?
+  managerId      String?
+  teamMembers    String[]
+  tags           String[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  tasks          Task[]
+  sprints        Sprint[]
+  timesheets     Timesheet[]
+
+  @@index([organizationId])
+  @@map("projects")
+}
+
+model Sprint {
+  id             String    @id @default(uuid())
+  organizationId String
+  projectId      String
+  name           String
+  goal           String?
+  startDate      DateTime  @db.Date
+  endDate        DateTime  @db.Date
+  status         String    @default("planning")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  project        Project      @relation(fields: [projectId], references: [id])
+  tasks          Task[]
+
+  @@index([organizationId, projectId])
+  @@map("sprints")
+}
+
+model Task {
+  id             String      @id @default(uuid())
+  organizationId String
+  projectId      String?
+  sprintId       String?
+  title          String
+  description    String?
+  status         TaskStatus  @default(TODO)
+  priority       String      @default("medium")
+  assigneeId     String?
+  creatorId      String?
+  dueDate        DateTime?
+  estimatedHours Decimal?    @db.Decimal(6, 2)
+  loggedHours    Decimal?    @db.Decimal(6, 2)
+  tags           String[]
+  attachments    Json?
+  parentId       String?
+  order          Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  project        Project?     @relation(fields: [projectId], references: [id])
+  sprint         Sprint?      @relation(fields: [sprintId], references: [id])
+  assignee       User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator        User?        @relation("TaskCreator", fields: [creatorId], references: [id])
+  parent         Task?        @relation("TaskHierarchy", fields: [parentId], references: [id])
+  subtasks       Task[]       @relation("TaskHierarchy")
+  timesheets     Timesheet[]
+
+  @@index([organizationId])
+  @@map("tasks")
+}
+
+model Timesheet {
+  id             String    @id @default(uuid())
+  organizationId String
+  userId         String
+  projectId      String?
+  taskId         String?
+  date           DateTime  @db.Date
+  hours          Decimal   @db.Decimal(5, 2)
+  description    String?
+  billable       Boolean   @default(true)
+  approved       Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+  project        Project?     @relation(fields: [projectId], references: [id])
+  task           Task?        @relation(fields: [taskId], references: [id])
+
+  @@index([organizationId, userId])
+  @@map("timesheets")
+}
+
+// ─── CRM ──────────────────────────────────────────────────────────────────────
+
+model Contact {
+  id             String    @id @default(uuid())
+  organizationId String
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  company        String?
+  title          String?
+  source         String?
+  tags           String[]
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  leads          Lead[]
+  deals          Deal[]
+
+  @@index([organizationId])
+  @@map("contacts")
+}
+
+model Lead {
+  id             String     @id @default(uuid())
+  organizationId String
+  contactId      String?
+  title          String
+  value          Decimal?   @db.Decimal(12, 2)
+  source         String?
+  status         LeadStatus @default(NEW)
+  assigneeId     String?
+  notes          String?
+  tags           String[]
+  convertedAt    DateTime?
+  dealId         String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  contact        Contact?     @relation(fields: [contactId], references: [id])
+
+  @@index([organizationId])
+  @@map("leads")
+}
+
+model Deal {
+  id             String     @id @default(uuid())
+  organizationId String
+  contactId      String?
+  title          String
+  value          Decimal    @db.Decimal(12, 2)
+  stage          String     @default("prospecting")
+  probability    Int        @default(0)
+  expectedCloseDate DateTime? @db.Date
+  actualCloseDate DateTime? @db.Date
+  status         DealStatus @default(OPEN)
+  assigneeId     String?
+  notes          String?
+  tags           String[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  contact        Contact?     @relation(fields: [contactId], references: [id])
+
+  @@index([organizationId])
+  @@map("deals")
+}
+
+// ─── Inventory & POS ──────────────────────────────────────────────────────────
+
+model Warehouse {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  code           String?
+  address        Json?
+  isDefault      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  stockItems     StockItem[]
+
+  @@index([organizationId])
+  @@map("warehouses")
+}
+
+model StockItem {
+  id             String    @id @default(uuid())
+  organizationId String
+  productId      String?
+  warehouseId    String?
+  sku            String?
+  quantity       Decimal   @db.Decimal(12, 2) @default(0)
+  reservedQty    Decimal   @db.Decimal(12, 2) @default(0)
+  reorderLevel   Decimal?  @db.Decimal(12, 2)
+  reorderQty     Decimal?  @db.Decimal(12, 2)
+  costPrice      Decimal?  @db.Decimal(12, 2)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  product        Product?     @relation(fields: [productId], references: [id])
+  warehouse      Warehouse?   @relation(fields: [warehouseId], references: [id])
+
+  @@index([organizationId])
+  @@map("stock_items")
+}
+
+model Order {
+  id             String      @id @default(uuid())
+  organizationId String
+  orderNumber    String
+  type           String      @default("pos")
+  customerId     String?
+  status         OrderStatus @default(PENDING)
+  items          Json
+  subtotal       Decimal     @db.Decimal(12, 2)
+  taxAmount      Decimal     @db.Decimal(12, 2)
+  discount       Decimal     @db.Decimal(12, 2) @default(0)
+  total          Decimal     @db.Decimal(12, 2)
+  paymentMethod  String?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, orderNumber])
+  @@index([organizationId])
+  @@map("orders")
+}
+
+// ─── Vendor & Expenses ────────────────────────────────────────────────────────
+
+model Vendor {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  email          String?
+  phone          String?
+  website        String?
+  gstNumber      String?
+  pan            String?
+  address        Json?
+  bankDetails    Json?
+  currency       String    @default("INR")
+  notes          String?
+  tags           String[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("vendors")
+}
+
+model Expense {
+  id             String        @id @default(uuid())
+  organizationId String
+  userId         String?
+  category       String
+  amount         Decimal       @db.Decimal(12, 2)
+  currency       String        @default("INR")
+  date           DateTime      @db.Date
+  description    String?
+  receiptUrl     String?
+  status         ExpenseStatus @default(PENDING)
+  approvedBy     String?
+  approvedAt     DateTime?
+  reimbursedAt   DateTime?
+  vendorId       String?
+  projectId      String?
+  tags           String[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@map("expenses")
+}
+
+// ─── Tools & Collaboration ────────────────────────────────────────────────────
+
+model Contract {
+  id             String    @id @default(uuid())
+  organizationId String
+  title          String
+  parties        Json
+  content        String?
+  status         String    @default("draft")
+  startDate      DateTime? @db.Date
+  endDate        DateTime? @db.Date
+  value          Decimal?  @db.Decimal(12, 2)
+  signedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("contracts")
+}
+
+model Form {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  fields         Json
+  settings       Json?
+  isPublished    Boolean   @default(false)
+  submissions    Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("forms")
+}
+
+model SupportTicket {
+  id             String        @id @default(uuid())
+  organizationId String
+  ticketNumber   String
+  title          String
+  description    String?
+  status         TicketStatus  @default(OPEN)
+  priority       String        @default("medium")
+  assigneeId     String?
+  reporterId     String?
+  category       String?
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, ticketNumber])
+  @@index([organizationId])
+  @@map("support_tickets")
+}
+
+model KBArticle {
+  id             String    @id @default(uuid())
+  organizationId String
+  title          String
+  content        String?
+  category       String?
+  tags           String[]
+  isPublished    Boolean   @default(false)
+  views          Int       @default(0)
+  authorId       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("kb_articles")
+}
+
+model CalendarEvent {
+  id             String    @id @default(uuid())
+  organizationId String
+  title          String
+  description    String?
+  startAt        DateTime
+  endAt          DateTime
+  allDay         Boolean   @default(false)
+  location       String?
+  attendees      String[]
+  creatorId      String?
+  color          String?
+  recurrence     Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("calendar_events")
+}
+
+model Channel {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  type           String    @default("public")
+  members        String[]
+  creatorId      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  messages       Message[]
+
+  @@index([organizationId])
+  @@map("channels")
+}
+
+model Message {
+  id             String    @id @default(uuid())
+  organizationId String
+  channelId      String?
+  senderId       String?
+  content        String
+  type           String    @default("text")
+  attachments    Json?
+  readBy         String[]
+  parentId       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  channel        Channel?     @relation(fields: [channelId], references: [id])
+  parent         Message?     @relation("MessageThread", fields: [parentId], references: [id])
+  replies        Message[]    @relation("MessageThread")
+
+  @@index([organizationId, channelId])
+  @@map("messages")
+}
+
+model MediaFile {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  originalName   String?
+  mimeType       String?
+  size           Int?
+  url            String
+  thumbnailUrl   String?
+  folder         String?
+  uploadedBy     String?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("media_files")
+}
+
+// ─── Automation & Developer ───────────────────────────────────────────────────
+
+model AutomationWorkflow {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  trigger        Json
+  actions        Json
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  runCount       Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("automation_workflows")
+}
+
+model WebhookEndpoint {
+  id             String    @id @default(uuid())
+  organizationId String
+  url            String
+  events         String[]
+  secret         String?
+  isActive       Boolean   @default(true)
+  lastCalledAt   DateTime?
+  failureCount   Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("webhook_endpoints")
+}
+
+model APIKey {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  keyHash        String
+  prefix         String
+  permissions    String[]
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("api_keys")
+}
+
+// ─── System ───────────────────────────────────────────────────────────────────
+
+model Notification {
+  id             String    @id @default(uuid())
+  organizationId String
+  userId         String
+  type           String
+  title          String
+  message        String?
+  data           Json?
+  isRead         Boolean   @default(false)
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, userId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String    @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         String
+  resource       String
+  resourceId     String?
+  oldData        Json?
+  newData        Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([resource, resourceId])
+  @@map("audit_logs")
+}
+
+model FeatureFlag {
+  id             String    @id @default(uuid())
+  organizationId String
+  key            String
+  value          Boolean   @default(false)
+  description    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@map("feature_flags")
+}
+
+model CustomField {
+  id             String    @id @default(uuid())
+  organizationId String
+  entity         String
+  name           String
+  label          String
+  type           String    @default("text")
+  options        Json?
+  required       Boolean   @default(false)
+  order          Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, entity])
+  @@map("custom_fields")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+  GUEST
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+  FREELANCE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFERED
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PAID
+  PARTIAL
+  OVERDUE
+  CANCELLED
+  VOID
+}
+
+enum EstimateStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+  CANCELLED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  CONVERTED
+  LOST
+}
+
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
